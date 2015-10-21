@@ -7,18 +7,19 @@ This program calculates various biological paramters regarding a set of transcri
 
 Two inputs are mandatory: 
 
--i: A .bed file describing transcript regions over which to calculate properties
--g: A FASTA file of the genome from which the transcriptome is derived. 
+`-i`: A .bed file describing transcript regions over which to calculate properties  
+`-g`: A FASTA file of the genome from which the transcriptome is derived. 
 
 Further inputs determine the properties to compute of the input transcriptome
 
 #### Output 
 
-The "-o" flag specifies the output basename, and a series of CSV files will be generated with this basename for each property supplied on the command line. 
+The `-o` flag specifies the output basename, and a series of CSV files will be generated with this basename for each property supplied on the command line. 
 
 #### Example usage
 ```
-./transcriptome_properties.py -i grch38_exons.bed -g genome.fa -o grch38_tx --nt 4 --exonct --length --gc
+./transcriptome_properties.py -i grch38_exons.bed -g genome.fa -o grch38_tx --nt 4\
+			       --exonct --length --gc
 ```
 
 #### Example output
@@ -47,12 +48,12 @@ ViennaRNA - https://www.tbi.univie.ac.at/RNA/index.html
 
 ##### External data
 
-Transcriptome region BED files - generated from https://github.com/stephenfloor/extract-transcript-regions
-Whole genome fasta file - downloaded from UCSC/Ensembl or similar
-TargetScan miRNA scores - downloaded from http://www.targetscan.org/cgi-bin/targetscan/data_download.cgi?db=vert_70
- -- download the Summary_Counts file
- -- can extract human-only with: awk '$4 == 9606 {print $0}' Summary_Counts.txt > human_mir_targets.txt
-Ensembl/UCSC-to-refseq mapping - required for calculation of TargetScan scores per transcript region
+Transcriptome region BED files - generated from https://github.com/stephenfloor/extract-transcript-regions  
+Whole genome fasta file - downloaded from UCSC/Ensembl or similar  
+TargetScan miRNA scores - downloaded from http://www.targetscan.org/cgi-bin/targetscan/data_download.cgi?db=vert_70  
+ -- download the Summary_Counts file  
+ -- can extract human-only with: awk '$4 == 9606 {print $0}' Summary_Counts.txt > human_mir_targets.txt  
+Ensembl/UCSC-to-refseq mapping - required for calculation of TargetScan scores per transcript region  
 
 #### Notes
 
