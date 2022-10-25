@@ -325,7 +325,7 @@ def process_line(line):
         len_outfile.write("%s,%d\n" % (transcriptID, seqlen))
 
     if (args.exonct):
-        exonct_outfile.write("%s,%s\n" % (transcriptID, txid_to_exonct[transcriptID]))
+        exonct_outfile.write("%s,%s\n" % (transcriptID, txid_to_exonct[transcriptID.split("::")[0]]))
         
     if (args.cap_structure): 
         # calculate the deltaG of the 50nt after the 5' end here, or if the 5' UTR is less than 50nt just calculate the deltaG of the whole thing.
