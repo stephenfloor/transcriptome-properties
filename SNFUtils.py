@@ -1,7 +1,6 @@
 #!/usr/bin/env python 
 
 import os,subprocess,sys
-from itertools import izip
 import numpy as np 
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -158,11 +157,11 @@ def plot_dist_fancy (x, y, outname, yerror, title):
 
 def pairwise(t):
     it = iter(t)
-    return izip(it, it)
+    return zip(it, it)
 
 def chunkwise(t, size=2):
     it = iter(t)
-    return izip(*[it]*size)
+    return zip(*[it]*size)
 
 def stdout_from_command(command):
     p = subprocess.Popen(command,
@@ -181,9 +180,9 @@ def safe_open_file(filename):
     return outfile
 
 def prompt(promptstr): 
-    print promptstr
+    print( promptstr)
 
-    inp = raw_input("\nContinue?  [y/n]").lower()
+    inp = input("\nContinue?  [y/n]").lower()
 
     if (inp == "n" or inp == "no"):
         sys.exit(0)
@@ -218,10 +217,10 @@ def merge(d1, d2, merge_fn=lambda x,y:y):
     {'a': 2, 'c': 6, 'b': 4}
 
     """
-    print "---- d1 ----" 
-    print d1
-    print "---- d2 ----" 
-    print d2 
+    print ("---- d1 ----" )
+    print (d1)
+    print ("---- d2 ----" )
+    print (d2 )
     result = dict(d1)
     for k,v in d2.iteritems():
         if k in result:

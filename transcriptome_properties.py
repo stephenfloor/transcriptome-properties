@@ -47,7 +47,7 @@ import AnnotationConverter
 import TargetscanScores
 from SNFUtils import *
 from collections import defaultdict
-    
+from threading import Lock     
 
 # gets the folding energy of a sequence. returns a tuple containing energies (MFE, centroid, MEA) 
 # RNAfold courtesy viennaRNA 
@@ -57,20 +57,20 @@ def get_energy(sequence):
 
     lines = stdout_from_command("echo %s | RNAfold --noPS --MEA -p" % sequence)
 
-    #first line is just the seq - skip 
-    lines.next() 
+    # skip the first line of lines - just the seq 
+    next(lines)
 
     #second line has the MFE 
-    MFE = float(re.sub('[()]','', lines.next().split()[-1]))
+    MFE = float(re.sub('[()]','', next(lines).decode('utf8').split()[-1]))
         
     #third line has the ensemble energy - discarding for now
-    lines.next() 
+    next(lines)
     
     #fourth line has the centroid energy 
-    centroid = float(re.sub('[{}]','', lines.next().split()[-2]))
+    centroid = float(re.sub('[{}]','', next(lines).decode('utf8').split()[-2]))
     
     #fifth line has the MEA 
-    MEA = float(re.sub('[{}]','', lines.next().split()[-2]))
+    MEA = float(re.sub('[{}]','', next(lines).decode('utf8').split()[-2]))
 
     return (MFE, centroid, MEA)
 
@@ -143,21 +143,21 @@ utr3args.add_argument("--au-elements", help="Count number of AU-rich elements in
 
 args = parser.parse_args()
 
-print "-----------------------------------"
-print "|   transcriptome_properties.py   |"
-print "|    compute props of a txome     |"
-print "|      run with -h for help       |"
-print "|          snf 11/2014            |"
-print "-----------------------------------\n\n"
+print("-----------------------------------")
+print("|   transcriptome_properties.py   |")
+print("|    compute props of a txome     |")
+print("|      run with -h for help       |")
+print("|          snf 11/2014            |")
+print("-----------------------------------\n\n")
 
 
-print "Arguments:"
+print ("Arguments:")
 
-print args
+print (args)
 
 # get a streaming input of all the regions from bedtools
 
-print "\n\nReading from regions using bedtools getfasta: "
+print( "\n\nReading from regions using bedtools getfasta: ")
 
 # bedtools getfasta flags: 
 #  -name  preserve region name
@@ -166,16 +166,16 @@ print "\n\nReading from regions using bedtools getfasta: "
 #  -split concat all blocks in the input bed (i.e. splice together exons) 
 
 cmd = "bedtools getfasta -fi %s -bed %s -name -tab -s -fo - -split 2> %s_stderr.log" % (args.genome, args.input, args.output)
-print cmd + "\n"
+print( cmd + "\n")
 
 # sanity check inputs here
 
 prompted = False
 
 if (args.lfold):
-    print "Using RNALfold to calculate just MFE\n"
+    print ("Using RNALfold to calculate just MFE\n")
     if (args.nt != 4):
-        print "Warning: highest performance during benchmarks with --lfold achieved with 4 threads\n"
+        print ("Warning: highest performance during benchmarks with --lfold achieved with 4 threads\n")
     
 
 if (args.cap_structure):
@@ -221,14 +221,14 @@ txid_to_exonct = defaultdict(int)
 if (args.exonct):
     exonct_outfile = safe_open_file("%s_exonct.csv" % args.output)
     exonct_outfile.write("transcriptID,exonct\n")
-    print "Building exon count dictionary..."
+    print( "Building exon count dictionary...")
     # count the # of exons real quick and throw it into a dictionary
     # col 9 is exonct, col 3 is txid 
-    with open(args.input, "r") as inp:
+    with open(args.input, "rt") as inp:
         for line in inp:
             line = line.split()
             txid_to_exonct[line[3]] = line[9]
-    print "Built.\n"
+    print ("Built.\n")
 
 if (args.cap_structure):
     cap_structure_outfile = safe_open_file("%s_cap_structure.csv" % args.output) 
@@ -287,7 +287,7 @@ if (args.au_elements):
 #pool = multiprocessing.Pool(processes=args.nt)
 
 
-def process_line(line):
+def process_line(line, lock):
 
     line = line.split()
 
@@ -319,13 +319,23 @@ def process_line(line):
             
         percent_gc = (numG + numC) / float(seqlen - numN) if seqlen - numN > 0 else 0
 
+        '''acquire a thread lock'''
+        lock.acquire()
         gc_outfile.write("%s,%3.2f\n" % (transcriptID, percent_gc))
 
+        '''release the lock'''
+        lock.release()
+
+
     if (args.length):
+        lock.acquire()
         len_outfile.write("%s,%d\n" % (transcriptID, seqlen))
+        lock.release()
 
     if (args.exonct):
+        lock.acquire()
         exonct_outfile.write("%s,%s\n" % (transcriptID, txid_to_exonct[transcriptID]))
+        lock.release()
         
     if (args.cap_structure): 
         # calculate the deltaG of the 50nt after the 5' end here, or if the 5' UTR is less than 50nt just calculate the deltaG of the whole thing.
@@ -335,22 +345,30 @@ def process_line(line):
         else:
             nrg = get_energy(sequence[0:50])
 
+        lock.acquire()
         cap_structure_outfile.write("%s,%.1f,%.1f,%.1f\n" % (transcriptID, nrg[0],nrg[1],nrg[2]))
+        lock.release()
         
 
     if (args.deltag):
         # calculate the min deltag of a sliding window of size args.window across the region 
         if (args.lfold):
+            lock.acquire()
             deltag_outfile.write("%s,%.1f\n" % (transcriptID, get_rnalfold_energy(sequence, args.window)))
+            lock.release()
         else: 
             if (seqlen <= args.window):
                 nrg = get_energy(sequence)
+                lock.acquire()
                 deltag_outfile.write("%s,%.1f,%.1f,%.1f\n" % (transcriptID, nrg[0],nrg[1],nrg[2]))
+                lock.release()
             else: 
                 #nrg = get_sliding_energy(sequence, args.window, pool)
                 nrg = get_sliding_energy(sequence, args.window)
+                lock.acquire()
                 deltag_outfile.write("%s,%.1f,%.1f,%.1f\n" % (transcriptID, nrg[0],nrg[1],nrg[2]))
-            
+                lock.release()
+        
     if (args.kozak): 
         # score the Kozak context.  This is G c c A/G c c atg G.  The most important nts are +4, -3 and -6.  Scoring these as +3 and the others as +1. Max score = 13
         # need to implement this.  this is actually a "start codon" specific parm because it involves overlap between the 5' UTR and CDS. likewise for uorf-overlap 
@@ -364,7 +382,9 @@ def process_line(line):
             # something with a UTR that is less than 6nt is not likely to follow kozak behavior, so just setting the score to -1 to indicate oddball status 
             kozakScore = -1
     
+        lock.acquire()
         kozak_outfile.write("%s,%d\n" % (transcriptID, kozakScore))
+        lock.release()
 
     if (args.uorf_count or args.uorf_overlap): 
         # count the number of uORFs (min length 10 codons) in the sequence. 
@@ -393,7 +413,9 @@ def process_line(line):
         uorfs = uorfs_trimmed
 
         # nice up the output
+        lock.acquire()
         uorf_count_outfile.write("%s,%d\n" % (transcriptID, len(uorfs)))
+        lock.release()
 
         if (args.uorf_overlap): 
             
@@ -404,7 +426,9 @@ def process_line(line):
             #print sequence 
             #print starts, ends, overlaps
             
+            lock.acquire()
             uorf_overlap_outfile.write("%s,%d\n" % (transcriptID, overlaps))
+            lock.release()
 
 
     if (args.start_codon): 
@@ -418,13 +442,17 @@ def process_line(line):
 
         #print sequence, startCodon, mismatches
 
+        lock.acquire()
         start_codon_outfile.write("%s,%s,%d\n" % (transcriptID, startCodon, mismatches))
+        lock.release()
 
 
     if (args.rare_codons):
         codonTable = HumanCodonTable.HumanCodonTable()
         
+        lock.acquire()
         rare_codons_outfile.write("%s,%3.2f,%3.2f\n" % (transcriptID, codonTable.averageCodonFreq(sequence), codonTable.minCodonFreq(sequence, 5)))  # 5 here is the window size in codons, so 15 nucleotides 
+        lock.release()
 
 
 
@@ -466,11 +494,12 @@ def process_line(line):
 
                     
             if (nSites > 0):
-                    
+                
+                lock.acquire()
                 mirna_sites_outfile.write("%s,%d,%3.2f,%3.2f,%d,%3.2f,%3.2f,%d,%3.2f,%3.2f\n" % \
                                               (transcriptID, nSites, scoreSum, minScore, nCnsvSites, cnsvScoreSum, cnsvMinScore,\
                                                    nNoncnsvSites, noncnsvScoreSum, noncnsvMinScore))
-                
+                lock.release() 
                 
                 nSites /= float(seqlen)
                 scoreSum /= seqlen
@@ -479,9 +508,11 @@ def process_line(line):
                 nNoncnsvSites /= float(seqlen)
                 noncnsvScoreSum /= seqlen
 
+                lock.acquire() 
                 mirna_density_outfile.write("%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n" % \
                                               (transcriptID, nSites, scoreSum, nCnsvSites, cnsvScoreSum, nNoncnsvSites, noncnsvScoreSum))
 
+                lock.release()
 
 
     if (args.au_elements):
@@ -503,40 +534,52 @@ def process_line(line):
         else: 
             numAUElements = aurichFraction = longestAUElement = 0
 
+        lock.acquire()
         au_elements_outfile.write("%s,%s,%s,%3.2f,%s\n" % (transcriptID, auPentamerCount, numAUElements, aurichFraction, longestAUElement))
+        lock.release()
         
 
 
+'''MAIN'''
+'''if we've been called from the command line and we're in main'''
+if __name__ == "__main__":
 
-processed = 0 
+    '''create a new thread lock'''
+    lock = threading.Lock()
 
-delay = 0.1
-if (args.lfold):  # different sleep delays for lfold or regular because threads have different average durations in the two cases
-    delay = 0.01
+    processed = 0 
 
-for line in stdout_from_command(cmd):
+    delay = 0.1
+    if (args.lfold):  # different sleep delays for lfold or regular because threads have different average durations in the two cases
+        delay = 0.01
 
-    if (threading.activeCount() < args.nt + 1):
-        t = threading.Thread(target=process_line, args=(line,))
-        t.start()
-        processed += 1 
-        
-    else:
-        while(threading.activeCount() >= args.nt + 1):
-            time.sleep(delay)
-        t = threading.Thread(target=process_line, args=(line,))
-        t.start()
-        processed += 1 
+    for line in stdout_from_command(cmd):
 
-    if (not(processed % 2500)):
-        print "Processed %d entries..." % processed 
+        '''decode line'''
+        line = line.decode("utf-8")
 
-print "Processed %d entries." % processed 
 
-has_stderr = False
+        if (threading.active_count() < args.nt + 1):
+            t = threading.Thread(target=process_line, args=(line,lock,))
+            t.start()
+            processed += 1 
+            
+        else:
+            while(threading.active_count() >= args.nt + 1):
+                time.sleep(delay)
+            t = threading.Thread(target=process_line, args=(line,lock,))
+            t.start()
+            processed += 1 
 
-with open ("%s_stderr.log" % args.output, "r") as logfile:
-    for i,l in enumerate(logfile):
-        has_stderr = True
-if (has_stderr):
-    print "WARNING: stderr was generated during this run. See %s_stderr.log for details" % args.output
+        if (not(processed % 2500)):
+            print ("Processed %d entries..." % processed )
+
+    print ("Processed %d entries." % processed )
+
+    has_stderr = False
+
+    with open ("%s_stderr.log" % args.output, "r") as logfile:
+        for i,l in enumerate(logfile):
+            has_stderr = True
+    if (has_stderr):
+        print ("WARNING: stderr was generated during this run. See %s_stderr.log for details" % args.output)
