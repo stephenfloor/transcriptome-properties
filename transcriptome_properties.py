@@ -194,7 +194,7 @@ if (args.rare_codons):
     prompt("Using CDS specific options, so input should be CDS regions!") 
     prompted = True 
 
-if (args.mirna_sites or args.au_elements):
+if (args.mirna_sites):
     if (prompted):
         sys.exit("FATAL: multiple region-specific options for disparate regions selected.")
     prompt("Using 3' UTR specific options, so input should be 3' UTR regions!") 
@@ -334,7 +334,7 @@ def process_line(line, lock):
 
     if (args.exonct):
         lock.acquire()
-        exonct_outfile.write("%s,%s\n" % (transcriptID, txid_to_exonct[transcriptID]))
+        exonct_outfile.write("%s,%s\n" % (transcriptID, txid_to_exonct[transcriptID.split("::")[0]]))
         lock.release()
         
     if (args.cap_structure): 
